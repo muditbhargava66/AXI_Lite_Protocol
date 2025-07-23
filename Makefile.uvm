@@ -1,0 +1,95 @@
+# UVM-based AXI Lite Protocol Verification Makefile
+# For SystemVerilog UVM tests
+
+# Default values
+UVM_TESTNAME ?= axi_lite_basic_test
+UVM_VERBOSITY ?= UVM_MEDIUM
+SIM ?= modelsim
+
+# RTL source files
+RTL_FILES = rtl/axi_lite_master.v \
+           rtl/axi_lite_slave.v \
+           rtl/axi_lite_interface.sv
+
+# Testbench files
+TB_FILES = testbench/tb_top.sv \
+          testbench/axi_lite_test.sv
+
+# Compilation and simulation based on simulator
+ifeq ($(SIM),modelsim)
+    VLOG = vlog
+    VSIM = vsim
+    COMPILE_OPTS = -sv +define+UVM_TEST -L uvm_lib
+    SIM_OPTS = -c -do "run -all; quit"
+else ifeq ($(SIM),questa)
+    VLOG = vlog
+    VSIM = vsim
+    COMPILE_OPTS = -sv +define+UVM_TEST -L uvm_lib
+    SIM_OPTS = -c -do "run -all; quit"
+else ifeq ($(SIM),vcs)
+    VLOG = vcs
+    VSIM = ./simv
+    COMPILE_OPTS = -sverilog +define+UVM_TEST -ntb_opts uvm
+    SIM_OPTS = 
+else ifeq ($(SIM),xcelium)
+    VLOG = xmvlog
+    VSIM = xmsim
+    COMPILE_OPTS = -sv +define+UVM_TEST -uvm
+    SIM_OPTS = -R
+else
+    $(error Unsupported simulator: $(SIM). Use modelsim, questa, vcs, or xcelium)
+endif
+
+.PHONY: all compile simulate clean
+
+all: compile simulate
+
+compile:
+	@echo "Compiling UVM testbench with $(SIM)..."
+	@mkdir -p work
+ifeq ($(SIM),vcs)
+	$(VLOG) $(COMPILE_OPTS) -top tb_top $(RTL_FILES) $(TB_FILES)
+else ifeq ($(SIM),xcelium)
+	$(VLOG) $(COMPILE_OPTS) $(RTL_FILES) $(TB_FILES)
+else
+	$(VLOG) $(COMPILE_OPTS) $(RTL_FILES) $(TB_FILES)
+endif
+	@echo "Compilation complete."
+
+simulate:
+	@echo "Running UVM test: $(UVM_TESTNAME)"
+	@echo "Verbosity: $(UVM_VERBOSITY)"
+ifeq ($(SIM),modelsim)
+	$(VSIM) $(SIM_OPTS) tb_top +UVM_TESTNAME=$(UVM_TESTNAME) +UVM_VERBOSITY=$(UVM_VERBOSITY)
+else ifeq ($(SIM),questa)
+	$(VSIM) $(SIM_OPTS) tb_top +UVM_TESTNAME=$(UVM_TESTNAME) +UVM_VERBOSITY=$(UVM_VERBOSITY)
+else ifeq ($(SIM),vcs)
+	$(VSIM) +UVM_TESTNAME=$(UVM_TESTNAME) +UVM_VERBOSITY=$(UVM_VERBOSITY)
+else ifeq ($(SIM),xcelium)
+	$(VSIM) tb_top +UVM_TESTNAME=$(UVM_TESTNAME) +UVM_VERBOSITY=$(UVM_VERBOSITY)
+endif
+
+clean:
+	@echo "Cleaning UVM simulation files..."
+	@rm -rf work/ simv* csrc/ *.daidir/ *.vpd transcript vsim.wlf
+	@rm -f *.log *.history
+	@echo "UVM clean complete."
+
+help:
+	@echo "UVM AXI Lite Protocol Verification"
+	@echo "Available targets:"
+	@echo "  make all      - Compile and simulate"
+	@echo "  make compile  - Compile only"
+	@echo "  make simulate - Simulate only"
+	@echo "  make clean    - Clean generated files"
+	@echo ""
+	@echo "Variables:"
+	@echo "  UVM_TESTNAME  - Test to run (default: $(UVM_TESTNAME))"
+	@echo "  UVM_VERBOSITY - Verbosity level (default: $(UVM_VERBOSITY))"
+	@echo "  SIM          - Simulator (default: $(SIM))"
+	@echo ""
+	@echo "Available tests:"
+	@echo "  axi_lite_sanity_test    - Quick sanity check"
+	@echo "  axi_lite_basic_test     - Basic functionality"
+	@echo "  axi_lite_random_test    - Random transactions"
+	@echo "  axi_lite_regression_test - Full regression"
